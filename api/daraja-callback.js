@@ -2,29 +2,41 @@ module.exports = async (req, res) => {
   try {
     console.log("📩 Daraja Callback Received:", JSON.stringify(req.body, null, 2));
 
-    const body = req.body?.Body;
-
-    if (!body || !body.stkCallback) {
-      console.error("❌ Invalid callback body");
-      return res.status(400).send("Bad Request");
+    if (!req.body || !req.body.Body) {
+      console.error("❌ Callback error: Invalid data received");
+      return res.status(400).send("Invalid callback data");
     }
 
-    const stkCallback = body.stkCallback;
+    const stkCallback = req.body.Body.stkCallback;
     const resultCode = stkCallback.ResultCode;
     const resultDesc = stkCallback.ResultDesc;
-    const merchantRequestID = stkCallback.MerchantRequestID;
-    const checkoutRequestID = stkCallback.CheckoutRequestID;
-    const timestamp = new Date().toISOString();
+
+    // Default response
+    let message = `Payment failed: ${resultDesc}`;
+    let receiptCode = null;
 
     if (resultCode === 0) {
-      console.log(`✅ Payment SUCCESS for ${checkoutRequestID} at ${timestamp}`);
-    } else {
-      console.log(`❌ Payment FAILED for ${checkoutRequestID}: ${resultDesc}`);
+      // ✅ Successful transaction
+      const callbackItems = stkCallback.CallbackMetadata?.Item || [];
+
+      const amount = callbackItems.find(i => i.Name === "Amount")?.Value;
+      const mpesaReceipt = callbackItems.find(i => i.Name === "MpesaReceiptNumber")?.Value;
+      const phoneNumber = callbackItems.find(i => i.Name === "PhoneNumber")?.Value;
+      const transactionDate = callbackItems.find(i => i.Name === "TransactionDate")?.Value;
+
+      // 🎟️ Generate unique receipt code for conductor verification
+      receiptCode = "RC" + Math.floor(100000 + Math.random() * 900000);
+
+      message = `✅ Payment Successful!\nReceipt: ${mpesaReceipt}\nCode: ${receiptCode}\nAmount: ${amount}\nPhone: ${phoneNumber}\nDate: ${transactionDate}`;
     }
 
-    return res.status(200).json({ status: "ok" });
+    // Log final message (later you’ll store in DB instead of just logging)
+    console.log("📦 Finalized Payment:", message);
+
+    // ✅ Always respond 200 to Safaricom
+    res.json({ ResultCode: 0, ResultDesc: "Callback received successfully" });
   } catch (error) {
-    console.error("❌ Callback error:", error.message);
-    return res.status(500).send("Internal Server Error");
+    console.error("❌ Callback processing error:", error);
+    res.status(500).send("Server error");
   }
 };
