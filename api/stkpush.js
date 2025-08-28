@@ -1,19 +1,32 @@
 const axios = require("axios");
 
+// 📌 Helper: sanitize phone number to 254 format
+function sanitizePhoneNumber(phone) {
+  let normalized = phone.toString().trim();
+  if (normalized.startsWith("+")) normalized = normalized.substring(1);
+  if (normalized.startsWith("0")) normalized = "254" + normalized.substring(1);
+  if (normalized.startsWith("7")) normalized = "254" + normalized;
+  return normalized;
+}
+
 module.exports = async (req, res) => {
   try {
-    const { phoneNumber, amount } = req.body;
-
-    // === ENV CONFIG ===
-    const shortcode = process.env.DARAJA_SHORTCODE || "174379"; // sandbox PayBill
-    const passkey = process.env.DARAJA_PASSKEY;
-    const consumerKey = process.env.DARAJA_CONSUMER_KEY;
-    const consumerSecret = process.env.DARAJA_CONSUMER_SECRET;
-    const callbackUrl = "https://fare-check.vercel.app/daraja-callback";
+    let { phoneNumber, amount } = req.body;
 
     if (!phoneNumber || !amount) {
       return res.status(400).json({ error: "Phone number and amount required" });
     }
+
+    // ✅ sanitize phone number
+    phoneNumber = sanitizePhoneNumber(phoneNumber);
+    amount = Number(amount);
+
+    // === ENV CONFIG ===
+    const shortcode = process.env.DARAJA_SHORTCODE || "174379"; // sandbox
+    const passkey = process.env.DARAJA_PASSKEY;
+    const consumerKey = process.env.DARAJA_CONSUMER_KEY;
+    const consumerSecret = process.env.DARAJA_CONSUMER_SECRET;
+    const callbackUrl = "https://fare-check.vercel.app/daraja-callback";
 
     // 1️⃣ Get access token
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
@@ -35,7 +48,7 @@ module.exports = async (req, res) => {
         Password: password,
         Timestamp: timestamp,
         TransactionType: "CustomerPayBillOnline",
-        Amount: Number(amount),
+        Amount: amount,
         PartyA: phoneNumber,
         PartyB: shortcode,
         PhoneNumber: phoneNumber,
